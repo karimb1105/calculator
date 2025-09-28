@@ -13,14 +13,20 @@ typedef struct {
     char operation;
     gboolean entering_a;
     char buff[BUF_SIZE];
+    char display[BUF_SIZE];
 } calc_state;
+
+// TO-DO: backend
+
+
 
 static void number_clicked(GtkWidget *button, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
     const char *digit = gtk_button_get_label(GTK_BUTTON(button));
-    if(strlen(st->buff) + strlen(digit) < BUF_SIZE) {
+    if(strlen(st->display) + strlen(digit) < BUF_SIZE) {
+        strcat(st->display, digit);
         strcat(st->buff, digit);
-        gtk_label_set_text(GTK_LABEL(st->label), st->buff);
+        gtk_label_set_text(GTK_LABEL(st->label), st->display);
         if(st->entering_a) {
              st->a = atoi(st->buff);
          } else {
@@ -32,29 +38,73 @@ static void number_clicked(GtkWidget *button, gpointer user_data) {
 static void operation_clicked(GtkWidget *button, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
     const char *user_operation = gtk_button_get_label(GTK_BUTTON(button));
-    if(strlen(st->buff) + strlen(user_operation) < BUF_SIZE) {
+    if(strlen(st->display) + strlen(user_operation) < BUF_SIZE) {
         if(st->entering_a == FALSE) {
             char error[] = "Only one operation allowed.";
             gtk_label_set_text(GTK_LABEL(st->label), error);
-        } else {    
-             strcat(st->buff, user_operation);
-             gtk_label_set_text(GTK_LABEL(st->label), st->buff);
+        } else {
+             if(st->a == 0) {
+                const char *empty = "0";
+                strcat(st->display, empty);
+             }
+             st->operation = *user_operation;
+             st->buff[0] = '\0';
+             strcat(st->display, user_operation);
+             gtk_label_set_text(GTK_LABEL(st->label), st->display);
              st->entering_a = FALSE;
              st->operation = *user_operation;
         }
     }
 }
 
+// backend
 static void equals_clicked(GtkWidget *button, gpointer user_data) { 
     calc_state *st = (calc_state *)user_data;
+    switch(st->operation) {
+        case '+': { st->result = st->a + st->b; break; }
+        case '-': { st->result = st->a - st->b; break; }
+        case '*': { st->result = st->a * st->b; break; }
+        case '/': { st->result = st->a / st->b; break; }
+        default :
+            st->result = -1;
+    }
+    st->entering_a = TRUE;
     sprintf(st->buff, "%d", st->result);
+    sprintf(st->display, "%d", st->result);
     gtk_label_set_text(GTK_LABEL(st->label), st->buff);
+    st->a = st->result; 
+    st->b = 0;
+    st->operation = 0;
 }
 
+// remove the most recent character in the buffer
+static void backspace_clicked(GtkWidget *button, gpointer user_data) {
+    calc_state *st = (calc_state *)user_data;
+    int len_display = strlen(st->display);
+    if(len_display > 0) {
+        st->display[len_display-1] = '\0';
+    }
+    int len_buff = strlen(st->buff);
+    if(len_buff > 0) {
+        st->buff[len_buff-1] = '\0';
+        if(st->entering_a) {
+            st->a = (len_buff == 1) ? 0 : atoi(st->buff);
+        } else {
+            st->b = (len_buff == 1) ? 0 : atoi(st->buff);
+        }
+    }
+    gtk_label_set_text(GTK_LABEL(st->label), st->display);
+}
 static void clear_clicked(GtkWidget *widget, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
     st->buff[0] = '\0';
+    st->display[0] = '\0';
+    st->a = 0;
+    st->b = 0;
+    st->operation = 0;
+    st->result = 0;
     gtk_label_set_text(GTK_LABEL(st->label), st->buff);
+    st->entering_a = TRUE;
 }
 
 static GtkWidget *create_button(const char *label, GCallback callback,
@@ -88,7 +138,8 @@ static void activate (GtkApplication *app,
   st->buff[0] = '\0';
   st->entering_a = TRUE;  
   gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 4, 1);
-  create_button("CLEAR", G_CALLBACK(clear_clicked), st, grid, 0, 1, 3, 1);
+  create_button("CLEAR", G_CALLBACK(clear_clicked), st, grid, 0, 1, 2, 1);
+  create_button("<-", G_CALLBACK(backspace_clicked), st, grid, 2, 1, 1, 1);
   create_button("/", G_CALLBACK(operation_clicked), st, grid, 3, 1, 1, 1);  
   create_button("1", G_CALLBACK(number_clicked), st, grid, 0, 2, 1, 1);
   create_button("2", G_CALLBACK(number_clicked), st, grid, 1, 2, 1, 1);
@@ -121,4 +172,3 @@ main (int    argc,
 
   return status;
 }
-
