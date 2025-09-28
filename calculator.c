@@ -7,18 +7,18 @@
 
 typedef struct {
     GtkWidget *label;
-    int a;
-    int b;
-    int result;
+    double a;
+    double b;
+    double result;
     char operation;
     gboolean entering_a;
     char buff[BUF_SIZE];
     char display[BUF_SIZE];
 } calc_state;
 
-// TO-DO: backend
-
-
+// to-do: implement decimals
+// use atof instead of atoi, sprintf(..., %g, ...)
+// decimal button method 
 
 static void number_clicked(GtkWidget *button, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
@@ -28,9 +28,9 @@ static void number_clicked(GtkWidget *button, gpointer user_data) {
         strcat(st->buff, digit);
         gtk_label_set_text(GTK_LABEL(st->label), st->display);
         if(st->entering_a) {
-             st->a = atoi(st->buff);
+             st->a = (double)atof(st->buff);
          } else {
-            st->b = atoi(st->buff);
+            st->b = (double)atof(st->buff);
          }
     }
 }
@@ -39,13 +39,11 @@ static void operation_clicked(GtkWidget *button, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
     const char *user_operation = gtk_button_get_label(GTK_BUTTON(button));
     if(strlen(st->display) + strlen(user_operation) < BUF_SIZE) {
-        if(st->entering_a == FALSE) {
-            char error[] = "Only one operation allowed.";
-            gtk_label_set_text(GTK_LABEL(st->label), error);
-        } else {
-             if(st->a == 0) {
+        if(st->entering_a) {
+             if(st->a == 0 && strlen(st->display) == 0) {
                 const char *empty = "0";
                 strcat(st->display, empty);
+                
              }
              st->operation = *user_operation;
              st->buff[0] = '\0';
@@ -65,12 +63,13 @@ static void equals_clicked(GtkWidget *button, gpointer user_data) {
         case '-': { st->result = st->a - st->b; break; }
         case '*': { st->result = st->a * st->b; break; }
         case '/': { st->result = st->a / st->b; break; }
+        case 0: { st->result = st->a; break; }
         default :
-            st->result = -1;
+            st->result = 0;
     }
     st->entering_a = TRUE;
-    sprintf(st->buff, "%d", st->result);
-    sprintf(st->display, "%d", st->result);
+    sprintf(st->buff, "%g", st->result);
+    sprintf(st->display, "%g", st->result);
     gtk_label_set_text(GTK_LABEL(st->label), st->buff);
     st->a = st->result; 
     st->b = 0;
@@ -82,15 +81,22 @@ static void backspace_clicked(GtkWidget *button, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
     int len_display = strlen(st->display);
     if(len_display > 0) {
+        char removed = st->display[len_display - 1];
         st->display[len_display-1] = '\0';
-    }
-    int len_buff = strlen(st->buff);
-    if(len_buff > 0) {
-        st->buff[len_buff-1] = '\0';
-        if(st->entering_a) {
-            st->a = (len_buff == 1) ? 0 : atoi(st->buff);
+        if(removed == '+' || removed == '-' || removed == '*' || removed == '/') {
+            st->operation = 0;
+            st->entering_a = TRUE;
+            snprintf(st->buff, BUF_SIZE, "%g", st->a);
         } else {
-            st->b = (len_buff == 1) ? 0 : atoi(st->buff);
+            int len_buff = strlen(st->buff);
+            if(len_buff > 0) {
+                st->buff[len_buff - 1] = '\0';
+                if(st->entering_a) {
+                    st->a = (len_buff == 1) ? 0 : atof(st->buff);
+                } else {
+                    st->b = (len_buff == 1) ? 0 : atof(st->buff);
+                }
+            }
         }
     }
     gtk_label_set_text(GTK_LABEL(st->label), st->display);
@@ -114,7 +120,28 @@ static GtkWidget *create_button(const char *label, GCallback callback,
     GtkWidget *button = gtk_button_new_with_label(label);
     g_signal_connect(button, "clicked", callback, user_data);
     gtk_grid_attach(GTK_GRID(grid), button, col, row, size_x, size_y);
+    gtk_widget_set_hexpand(button, TRUE);
+    gtk_widget_set_vexpand(button, TRUE);
     return button;
+}
+
+static void resize_label(GtkWidget *widget, GdkRectangle *allocation,
+                         gpointer user_data) {
+    GtkWidget *label = GTK_WIDGET(user_data);
+    int new_size = allocation->height / 20;
+    char css[128];
+    snprintf(css, sizeof(css), 
+             "label { font-size: %dpx; }" 
+             "button {font-size: %dpx; }",
+             new_size, 
+             new_size);
+
+    GtkCssProvider *provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(provider, css, -1, NULL);
+    GtkStyleContext *context = gtk_widget_get_style_context(widget);
+    gtk_style_context_add_provider_for_screen(gdk_screen_get_default(), 
+        GTK_STYLE_PROVIDER(provider), 
+        GTK_STYLE_PROVIDER_PRIORITY_USER);
 }
 
 static void activate (GtkApplication *app,
@@ -124,7 +151,8 @@ static void activate (GtkApplication *app,
   GtkWidget *grid;
   
   window = gtk_application_window_new (app);
-  gtk_window_set_title (GTK_WINDOW (window), "Window");
+  gtk_window_set_title (GTK_WINDOW (window), "karim's calculator");
+  gtk_window_set_default_size(GTK_WINDOW(window), 250, 250);
   gtk_container_set_border_width (GTK_CONTAINER (window), 10);
   char *label_text[BUF_SIZE];
 
@@ -132,11 +160,18 @@ static void activate (GtkApplication *app,
   gtk_container_add (GTK_CONTAINER (window), grid);
   
   GtkWidget *label = gtk_label_new("I'm a petty ass bitch");
- 
+  
+  gtk_widget_set_hexpand(label, TRUE);
+  gtk_widget_set_vexpand(label, TRUE);
+
+  g_signal_connect(window, "size-allocate", G_CALLBACK(resize_label), label);
+
   calc_state *st = g_malloc(sizeof(calc_state));
   st->label = label;
   st->buff[0] = '\0';
-  st->entering_a = TRUE;  
+  st->display[0] = '\0';
+  st->entering_a = TRUE;
+    
   gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 4, 1);
   create_button("CLEAR", G_CALLBACK(clear_clicked), st, grid, 0, 1, 2, 1);
   create_button("<-", G_CALLBACK(backspace_clicked), st, grid, 2, 1, 1, 1);
