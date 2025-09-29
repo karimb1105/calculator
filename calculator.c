@@ -7,73 +7,76 @@
 
 typedef struct {
     GtkWidget *label;
-    double a;
-    double b;
     double result;
-    char operation;
-    gboolean entering_a;
     char buff[BUF_SIZE];
     char display[BUF_SIZE];
+    char current_op;
+    gboolean has_result;
 } calc_state;
 
-// to-do: implement decimals
-// use atof instead of atoi, sprintf(..., %g, ...)
-// decimal button method 
+// to-do: implement decimal button
 
 static void number_clicked(GtkWidget *button, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
     const char *digit = gtk_button_get_label(GTK_BUTTON(button));
     if(strlen(st->display) + strlen(digit) < BUF_SIZE) {
+        if(strcmp(digit, ".") == 0) {
+            if(strchr(st->buff, '.') != NULL) {
+                return;
+            }
+            if(strlen(st->buff) == 0) {
+                strcat(st->buff, "0");
+                strcat(st->display, "0");
+            }
+        }
+    }
+    if(strlen(st->display) + strlen(digit) < BUF_SIZE &&
+        strlen(st->display) + strlen(digit) < BUF_SIZE) {
         strcat(st->display, digit);
         strcat(st->buff, digit);
         gtk_label_set_text(GTK_LABEL(st->label), st->display);
-        if(st->entering_a) {
-             st->a = (double)atof(st->buff);
-         } else {
-            st->b = (double)atof(st->buff);
-         }
     }
 }
 
 static void operation_clicked(GtkWidget *button, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
     const char *user_operation = gtk_button_get_label(GTK_BUTTON(button));
-    if(strlen(st->display) + strlen(user_operation) < BUF_SIZE) {
-        if(st->entering_a) {
-             if(st->a == 0 && strlen(st->display) == 0) {
-                const char *empty = "0";
-                strcat(st->display, empty);
-                
-             }
-             st->operation = *user_operation;
-             st->buff[0] = '\0';
-             strcat(st->display, user_operation);
-             gtk_label_set_text(GTK_LABEL(st->label), st->display);
-             st->entering_a = FALSE;
-             st->operation = *user_operation;
+    if(strlen(st->buff) == 0) {
+        return;
+    }
+    double value = (strlen(st->buff) > 0) ? atof(st->buff) : 0;
+    if(!st->has_result) {
+        st->result = value;
+        st->has_result = TRUE;
+    } else {
+        switch(st->current_op) {
+            case '+': st->result += value; break;
+            case '-': st->result -= value; break;
+            case '*': st->result *= value; break;
+            case '/': if(value != 0) st->result /= value; break;
         }
     }
+    st->current_op = *user_operation;
+    st->buff[0] = '\0';
+    strcat(st->display, user_operation);
+    gtk_label_set_text(GTK_LABEL(st->label), st->display); 
 }
 
 // backend
 static void equals_clicked(GtkWidget *button, gpointer user_data) { 
     calc_state *st = (calc_state *)user_data;
-    switch(st->operation) {
-        case '+': { st->result = st->a + st->b; break; }
-        case '-': { st->result = st->a - st->b; break; }
-        case '*': { st->result = st->a * st->b; break; }
-        case '/': { st->result = st->a / st->b; break; }
-        case 0: { st->result = st->a; break; }
-        default :
-            st->result = 0;
+    double value = (strlen(st->buff) > 0) ? atof(st->buff) : 0;
+    switch(st->current_op) {
+        case '+': { st->result += value; break; }
+        case '-': { st->result -= value; break; }
+        case '*': { st->result *= value; break; }
+        case '/': { if(value != 0) st->result /= value; break; }
     }
-    st->entering_a = TRUE;
-    sprintf(st->buff, "%g", st->result);
-    sprintf(st->display, "%g", st->result);
+    snprintf(st->buff, BUF_SIZE, "%g", st->result);
+    snprintf(st->display, BUF_SIZE, "%g", st->result);
     gtk_label_set_text(GTK_LABEL(st->label), st->buff);
-    st->a = st->result; 
-    st->b = 0;
-    st->operation = 0;
+    st->current_op = 0;
+    st->has_result = FALSE;
 }
 
 // remove the most recent character in the buffer
@@ -84,33 +87,24 @@ static void backspace_clicked(GtkWidget *button, gpointer user_data) {
         char removed = st->display[len_display - 1];
         st->display[len_display-1] = '\0';
         if(removed == '+' || removed == '-' || removed == '*' || removed == '/') {
-            st->operation = 0;
-            st->entering_a = TRUE;
-            snprintf(st->buff, BUF_SIZE, "%g", st->a);
+            st->current_op = '\0';
         } else {
             int len_buff = strlen(st->buff);
             if(len_buff > 0) {
                 st->buff[len_buff - 1] = '\0';
-                if(st->entering_a) {
-                    st->a = (len_buff == 1) ? 0 : atof(st->buff);
-                } else {
-                    st->b = (len_buff == 1) ? 0 : atof(st->buff);
-                }
             }
         }
+        gtk_label_set_text(GTK_LABEL(st->label), st->display);
     }
-    gtk_label_set_text(GTK_LABEL(st->label), st->display);
 }
 static void clear_clicked(GtkWidget *widget, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
     st->buff[0] = '\0';
     st->display[0] = '\0';
-    st->a = 0;
-    st->b = 0;
-    st->operation = 0;
     st->result = 0;
+    st->current_op = 0;
+    st->has_result = FALSE;
     gtk_label_set_text(GTK_LABEL(st->label), st->buff);
-    st->entering_a = TRUE;
 }
 
 static GtkWidget *create_button(const char *label, GCallback callback,
@@ -170,7 +164,9 @@ static void activate (GtkApplication *app,
   st->label = label;
   st->buff[0] = '\0';
   st->display[0] = '\0';
-  st->entering_a = TRUE;
+  st->result = 0;
+  st->current_op = 0;
+  st->has_result = FALSE;
     
   gtk_grid_attach(GTK_GRID(grid), label, 0, 0, 4, 1);
   create_button("CLEAR", G_CALLBACK(clear_clicked), st, grid, 0, 1, 2, 1);
@@ -188,7 +184,8 @@ static void activate (GtkApplication *app,
   create_button("8", G_CALLBACK(number_clicked), st, grid, 1, 4, 1, 1);
   create_button("9", G_CALLBACK(number_clicked), st, grid, 2, 4, 1, 1);
   create_button("+", G_CALLBACK(operation_clicked), st, grid, 3, 4, 1, 1);
-  create_button("0", G_CALLBACK(number_clicked), st, grid, 0, 5, 3, 1);
+  create_button("0", G_CALLBACK(number_clicked), st, grid, 0, 5, 2, 1);
+  create_button(".", G_CALLBACK(number_clicked), st, grid, 2, 5, 1, 1);
   create_button("=", G_CALLBACK(equals_clicked), st, grid, 3, 5, 1, 1);
   gtk_widget_show_all (window);
 }
