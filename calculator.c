@@ -14,8 +14,6 @@ typedef struct {
     gboolean has_result;
 } calc_state;
 
-// to-do: implement decimal button
-
 static void number_clicked(GtkWidget *button, gpointer user_data) {
     calc_state *st = (calc_state *)user_data;
     const char *digit = gtk_button_get_label(GTK_BUTTON(button));
@@ -153,7 +151,7 @@ static void activate (GtkApplication *app,
   grid = gtk_grid_new();
   gtk_container_add (GTK_CONTAINER (window), grid);
   
-  GtkWidget *label = gtk_label_new("I'm a petty ass bitch");
+  GtkWidget *label = gtk_label_new("Welcome! :)");
   
   gtk_widget_set_hexpand(label, TRUE);
   gtk_widget_set_vexpand(label, TRUE);
